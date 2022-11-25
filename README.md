@@ -1,17 +1,5 @@
-# Face-Recogntion-PyQt
+# Facial Recognition attendace
+November 2022
 
-Watch the full tutorial here: http://bit.ly/facepyqt
+Ran this code on a very poor webcam, multithreading was used to combact the issue of performance
 
-## Learn more AI and OpenCV GUI Design?
-
-Enroll in our YOLOv4 PyQt Course here : 
-https://www.augmentedstartups.com/yolov4-course
-
-
-## To Install the Facial Recognition Libraries Dependencies
-
-You will need the following:
-
-```pip install dlib==19.18.0```
-
-```pip install face-recognition```

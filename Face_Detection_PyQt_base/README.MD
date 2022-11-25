@@ -1,4 +1,5 @@
-# Facial Recognition Attendence GUI
-Modified by Augmented Startups & Geeky Bee
-October 2020
-Full Course - https://augmentedstartups.info/yolov4release
+# Facial Recognition attendace
+November 2022
+
+Ran this code on a very poor webcam, multithreading was used to combact the issue of performance
+
