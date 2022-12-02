@@ -33,10 +33,12 @@ class Ui_OutputDialog(QDialog):
         self.Time_Label.setText(current_time)
         self.registerButton.clicked.connect(self.register_buttonClicked)
         self.ClockInButton.clicked.connect(self.clockingIn)
+        self.clearList.clicked.connect(self.clearStudent)
         # self.saveButton.clicked.connect(self.saveNameClicked)
         self.stopSaving.setEnabled(False)
         self.stopSaving.setChecked(False)
         self.image = None
+        self.studentname = {}
 
     
 
@@ -60,6 +62,7 @@ class Ui_OutputDialog(QDialog):
                     if self.stop_thread:
                         break
                     if self.stopSaving.isChecked():
+                            self.toolTipLabel.setText("Click the Register button to train")
                             self.stopSaving.setEnabled(False)
                             self.saveButton.setChecked(False)
                             self.saveButton.setEnabled(True)
@@ -68,6 +71,7 @@ class Ui_OutputDialog(QDialog):
                     self.gray = cv2.cvtColor(self.image,cv2.COLOR_BGR2GRAY)
                     self.faces = self.face_cascade.detectMultiScale(self.gray)
                     if self.saveButton.isChecked():
+                       
                         self.saveButton.setEnabled(False)
                         self.stopSaving.setEnabled(True) 
                         if self.trainingName.text() != " ":                       
@@ -112,14 +116,20 @@ class Ui_OutputDialog(QDialog):
 
         
     def register_buttonClicked(self):
+         self.toolTipLabel.setText("Training Dataset.....")
+         print("trianing dataset....")
          self.registerButton.setEnabled(False)
-         print("register button checked")
          self.train()
+         self.toolTipLabel.setText("Training Done!")
          self.registerButton.setEnabled(True)      
                    
-                
+    def clearStudent(self):
+        self.toolTipLabel.setText("Clearing student list.....")
+        self.studentname = {}
+
                 
     def train(self):
+        
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         image_dir = os.path.join(BASE_DIR, "images")
 
@@ -198,7 +208,7 @@ class Ui_OutputDialog(QDialog):
                 else :     
                     self.studentname[name]  =  date_time_string
                 self.NameLabel.setText(name)
-                self.StatusLabel.setText('Clocked In')
+                self.StatusLabel.setText('Found')
                 self.HoursLabel.setText(str(datetime.datetime.now().hour) +  "h")
                 self.MinLabel.setText(str(datetime.datetime.now().minute) + "m")
                  
