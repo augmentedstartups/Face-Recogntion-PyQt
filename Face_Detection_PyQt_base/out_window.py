@@ -1,59 +1,181 @@
-# Modified by Augmented Startups & Geeky Bee
-# October 2020
-# Facial Recognition Attendence GUI
-# Full Course - https://augmentedstartups.info/yolov4release
-# *-
+
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.uic import loadUi
-from PyQt5.QtCore import pyqtSlot, QTimer
-from PyQt5.QtWidgets import QDialog
+from PyQt5.QtCore import pyqtSlot, QTimer, QDate, Qt
+from PyQt5.QtWidgets import QDialog,QMessageBox
 import cv2
 import face_recognition
 import numpy as np
 import datetime
 import os
-
-
+import csv
+from PyQt5.QtWidgets import * 
+from threading import Thread
+from PIL import Image
+import pickle
 class Ui_OutputDialog(QDialog):
     def __init__(self):
         super(Ui_OutputDialog, self).__init__()
         loadUi("./outputwindow.ui", self)
+        self.face_cascade = cv2.CascadeClassifier('cascades/data/haarcascade_frontalface_alt2.xml')
+        self.recognizer = cv2.face.LBPHFaceRecognizer_create()
+        self.recognizer.read("./recognizers/face-trainner.yml")
+        self.labels = {"person_name": 1}
+        with open("labels.pickle", 'rb') as f:
+            og_labels = pickle.load(f)
+            self.labels = {v:k for k,v in og_labels.items()}
+
+        #Update time
+        now = QDate.currentDate()
+        current_date = now.toString('ddd dd MMMM yyyy')
+        current_time = datetime.datetime.now().strftime("%I:%M %p")
+        self.Date_Label.setText(current_date)
+        self.Time_Label.setText(current_time)
+        self.registerButton.clicked.connect(self.register_buttonClicked)
+        self.ClockInButton.clicked.connect(self.clockingIn)
+        self.clearList.clicked.connect(self.clearStudent)
+        # self.saveButton.clicked.connect(self.saveNameClicked)
+        self.stopSaving.setEnabled(False)
+        self.stopSaving.setChecked(False)
         self.image = None
+        self.studentname = {}
+
+    
 
     @pyqtSlot()
     def startVideo(self, camera_name):
-        """
-        :param camera_name: link of camera or usb camera
-        :return:
-        """
-        if len(camera_name) == 1:
-        	self.capture = cv2.VideoCapture(int(camera_name))
-        else:
-        	self.capture = cv2.VideoCapture(camera_name)
-        self.timer = QTimer(self)  # Create Timer
-        path = 'ImagesAttendance'
-        if not os.path.exists(path):
-            os.mkdir(path)
-        # known face encoding and known face name list
-        images = []
-        self.class_names = []
-        self.encode_list = []
-        attendance_list = os.listdir(path)
-        # print(attendance_list)
-        for cl in attendance_list:
-            cur_img = cv2.imread(f'{path}/{cl}')
-            images.append(cur_img)
-            self.class_names.append(os.path.splitext(cl)[0])
-        for img in images:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            boxes = face_recognition.face_locations(img)
-            encodes_cur_frame = face_recognition.face_encodings(img, boxes)[0]
-            # encode = face_recognition.face_encodings(img)[0]
-            self.encode_list.append(encodes_cur_frame)
-        self.timer.timeout.connect(self.update_frame)  # Connect timeout to the output function
-        self.timer.start(40)  # emit the timeout() signal at x=40ms
+            """
+            :param camera_name: link of camera or usb camera
+            :return:
+            """
+            if len(camera_name) == 1:
+                self.capture = cv2.VideoCapture(int(camera_name))
+            else:
+                self.capture = cv2.VideoCapture(camera_name)
+            
+            self.stop_thread = False
+            
+            
 
-    def face_rec_(self, frame, encode_list_known, class_names):
+            def Mythread1():
+                while True:
+                    if self.stop_thread:
+                        break
+                    if self.stopSaving.isChecked():
+                            self.toolTipLabel.setText("Click the Register button to train")
+                            self.stopSaving.setEnabled(False)
+                            self.saveButton.setChecked(False)
+                            self.saveButton.setEnabled(True)
+                                
+                    self.ret, self.image = self.capture.read()
+                    self.gray = cv2.cvtColor(self.image,cv2.COLOR_BGR2GRAY)
+                    self.faces = self.face_cascade.detectMultiScale(self.gray)
+                    if self.saveButton.isChecked():
+                       
+                        self.saveButton.setEnabled(False)
+                        self.stopSaving.setEnabled(True) 
+                        if self.trainingName.text() != " ":                       
+                                register = self.trainingName.text()  
+                                path = os.path.join("images/",register)
+                                if not os.path.exists(path):
+                                    os.mkdir(path)
+                                
+                                for (x,y,w,h) in self.faces:
+                                    print(x,y,w,h)                
+                                    roi_gray = self.gray[y:y+h,x:x+w]
+                                    img_item = str(x)+ "my-image.png"  
+                                    updatedpath = os.path.join("images/",register,img_item)  
+                                    cv2.imwrite(updatedpath,roi_gray)
+                        print("ending loop")
+                        self.stopSaving.setChecked(False)
+                    self.displayImage(self.image)
+                 
+            self.thread = Thread(target=Mythread1)
+            # thread2 = Thread(target=self.update_frame)
+            self.thread.start()
+            # thread2.start()
+
+    def closeEvent(self,event):
+        # When everything done, release the capture
+        self.stop_thread = True  
+        self.thread.join()
+        print("thread killed")
+        self.capture.release()
+        cv2.destroyAllWindows()
+        # super(QMainWindow,self).closeEvent(event)
+
+    def clockingIn(self):
+        print(self.studentname)
+        #make sure the attendance is done and recorded here
+        #checking the studentName array if a value is already there
+        #if found there ignore it.
+        with open('Attendance.csv','a') as f:
+            for names in self.studentname:
+                f.writelines(f'\n{names},{self.studentname[names]},Clock In')
+        
+
+        
+    def register_buttonClicked(self):
+         self.toolTipLabel.setText("Training Dataset.....")
+         print("trianing dataset....")
+         self.registerButton.setEnabled(False)
+         self.train()
+         self.toolTipLabel.setText("Training Done!")
+         self.registerButton.setEnabled(True)      
+                   
+    def clearStudent(self):
+        self.toolTipLabel.setText("Clearing student list.....")
+        self.studentname = {}
+
+                
+    def train(self):
+        
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        image_dir = os.path.join(BASE_DIR, "images")
+
+        face_cascade = cv2.CascadeClassifier('cascades/data/haarcascade_frontalface_alt2.xml')
+        recognizer = cv2.face.LBPHFaceRecognizer_create()
+        current_id = 0
+        label_ids = {}
+        y_labels = []
+        x_train = []
+
+        for root, dirs, files in os.walk(image_dir):
+            for file in files:
+                if file.endswith("png") or file.endswith("jpg"):
+                    path = os.path.join(root,file)
+                    label = os.path.basename(root).replace(" ", "-").lower()
+                    # print(label)
+                    if not label in label_ids:
+                        label_ids[label] = current_id
+                        current_id += 1
+                    id_ = label_ids[label]
+                    # print(label_ids)
+			        #y_labels.append(label) # some number
+			        #x_train.append(path) # verify this image, turn into a NUMPY arrray, GRAY
+                    pil_image = Image.open(path).convert("L") # grayscale
+                    size = (550, 550)
+                    final_image = pil_image.resize(size, Image.ANTIALIAS)
+                    image_array = np.array(final_image, "uint8")
+                    #print(image_array)
+                    faces = face_cascade.detectMultiScale(image_array)
+
+                    for (x,y,w,h) in faces:
+                        roi = image_array[y:y+h, x:x+w]
+                        x_train.append(roi)
+                        y_labels.append(id_)
+
+        # print(y_labels)
+        # print(x_train)            
+        with open("labels.pickle", 'wb') as f:
+            pickle.dump(label_ids, f)
+
+        recognizer.train(x_train, np.array(y_labels))
+        recognizer.save("recognizers/face-trainner.yml")
+
+            
+
+    def face_rec_(self, frame):
         """
         :param frame: frame from camera
         :param encode_list_known: known face encoding
@@ -61,38 +183,87 @@ class Ui_OutputDialog(QDialog):
         :return:
         """
         # csv
-        def mark_attendance(name):
-            """
-            :param name: detected face known or unknown one
-            :return:
-            """
-            with open('Attendance.csv', 'a') as f:
+        face_cascade = cv2.CascadeClassifier('cascades/data/haarcascade_frontalface_alt2.xml')
+        gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray)
+        
+        for (x, y, w, h) in faces:
+            #print(x,y,w,h)
+            roi_gray = gray[y:y+h, x:x+w] #(ycord_start, ycord_end)
+            roi_color = frame[y:y+h, x:x+w]
+
+            # recognize? deep learned model predict keras tensorflow pytorch scikit learn
+            id_, conf = self.recognizer.predict(roi_gray)
+            if conf>=4 and conf <= 85:
+                # print(id_)
+                # print(self.labels[id_])
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                name = self.labels[id_]
+                color = (255,255,255)
+                stroke = 2
+                cv2.putText(frame, name, (x,y), font, 1, color, stroke, cv2.LINE_AA)
                 date_time_string = datetime.datetime.now().strftime("%y/%m/%d %H:%M:%S")
-                f.writelines(f'\n{name},{date_time_string}')
-        # face recognition
-        faces_cur_frame = face_recognition.face_locations(frame)
-        encodes_cur_frame = face_recognition.face_encodings(frame, faces_cur_frame)
-        # count = 0
-        for encodeFace, faceLoc in zip(encodes_cur_frame, faces_cur_frame):
-            match = face_recognition.compare_faces(encode_list_known, encodeFace, tolerance=0.50)
-            face_dis = face_recognition.face_distance(encode_list_known, encodeFace)
-            name = "unknown"
-            best_match_index = np.argmin(face_dis)
-            # print("s",best_match_index)
-            if match[best_match_index]:
-                name = class_names[best_match_index].upper()
-                y1, x2, y2, x1 = faceLoc
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.rectangle(frame, (x1, y2 - 20), (x2, y2), (0, 255, 0), cv2.FILLED)
-                cv2.putText(frame, name, (x1 + 6, y2 - 6), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255, 255, 255), 1)
-            mark_attendance(name)
+                if name in self.studentname.keys():
+                    pass
+                else :     
+                    self.studentname[name]  =  date_time_string
+                self.NameLabel.setText(name)
+                self.StatusLabel.setText('Found')
+                self.HoursLabel.setText(str(datetime.datetime.now().hour) +  "h")
+                self.MinLabel.setText(str(datetime.datetime.now().minute) + "m")
+                 
+
+
+            color = (255, 0, 0) #BGR 0-255
+            stroke = 2 
+            end_cord_x = x + w
+            end_cord_y = y + h
+            cv2.rectangle(frame, (x, y), (end_cord_x, end_cord_y), color, stroke)
         return frame
+       
 
-    def update_frame(self):
-        ret, self.image = self.capture.read()
-        self.displayImage(self.image, self.encode_list, self.class_names, 1)
+    def showdialog(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
 
-    def displayImage(self, image, encode_list, class_names, window=1):
+        msg.setText("This is a message box")
+        msg.setInformativeText("This is additional information")
+        msg.setWindowTitle("MessageBox demo")
+        msg.setDetailedText("The details are as follows:")
+        msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+
+
+    def ElapseList(self,name):
+        with open('Attendance.csv', "r") as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=',')
+            line_count = 2
+
+            Time1 = datetime.datetime.now()
+            Time2 = datetime.datetime.now()
+            for row in csv_reader:
+                for field in row:
+                    if field in row:
+                        if field == 'Clock In':
+                            if row[0] == name:
+                                #print(f'\t ROW 0 {row[0]}  ROW 1 {row[1]} ROW2 {row[2]}.')
+                                Time1 = (datetime.datetime.strptime(row[1], '%y/%m/%d %H:%M:%S'))
+                                self.TimeList1.append(Time1)
+                        if field == 'Clock Out':
+                            if row[0] == name:
+                                #print(f'\t ROW 0 {row[0]}  ROW 1 {row[1]} ROW2 {row[2]}.')
+                                Time2 = (datetime.datetime.strptime(row[1], '%y/%m/%d %H:%M:%S'))
+                                self.TimeList2.append(Time2)
+                                #print(Time2)
+
+
+
+
+
+    # def update_frame(self):
+    #     while True:
+           
+
+    def displayImage(self, image,  window=1):
         """
         :param image: frame from camera
         :param encode_list: known face encoding list
@@ -100,9 +271,10 @@ class Ui_OutputDialog(QDialog):
         :param window: number of window
         :return:
         """
-        image = cv2.resize(image, (640, 480))
+        
+        image = cv2.resize(self.image, (640, 480))
         try:
-            image = self.face_rec_(image, encode_list, class_names)
+            image = self.face_rec_(image)
         except Exception as e:
             print(e)
         qformat = QImage.Format_Indexed8
@@ -117,3 +289,6 @@ class Ui_OutputDialog(QDialog):
         if window == 1:
             self.imgLabel.setPixmap(QPixmap.fromImage(outImage))
             self.imgLabel.setScaledContents(True)
+
+
+
